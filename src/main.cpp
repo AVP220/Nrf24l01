@@ -13,7 +13,7 @@ struct DeviseStatus {
   bool flag;
   int ledsNum;
   int myColor[3];
-  char *adresse
+  char *adresse;
 };
 
 const int buttonPins[] = {2, 3, 4, 5, 6, 7, A1, A2, A3, A4};
@@ -40,6 +40,8 @@ const int NUM_BUTTONS = sizeof(buttonPins) / sizeof(buttonPins[0]);
 // Создаем массив структур ButtonStruct
 ButtonStruct buttons[NUM_BUTTONS] = { {GButton(0)} }; // Инициализируем с временным значением
 
+unsigned long startTime1;
+unsigned long startTimeCheck;
 
 
 
@@ -61,7 +63,7 @@ void radio_init(){
 
 
 void ping(int deviceNum) {
-  radio.openWritingPipe(1, MyData[i].addresses);
+  radio.openWritingPipe(reinterpret_cast<const uint8_t*>(MyData[deviceNum].adresse));
   radio.stopListening();
 
   const char checkCommand[] = "CHECK";
@@ -97,6 +99,22 @@ void ping(int deviceNum) {
   radio.startListening();
 }
 
+void Write(int myGroup, bool CommandToSent){
+  for(int i = 0; i < 3; i++){
+  radio.openWritingPipe(reinterpret_cast<const uint8_t*>(MyData[i + (myGroup*3)].adresse));
+  radio.stopListening(); 
+//и поидеии где-то здесь должен быть таймаут как в пинге чтоб отсеивать не подключеные
+  bool success = radio.write(&CommandToSent, sizeof(CommandToSent));//можно попробывать изминить bool на int и присылать так: -1 - опущен, 1 - поднят, 0 неизвестно, поскольу погут быть потенциальные проблемы с индекацией в SetColor()
+  bool returnFlag;
+  if (success && radio.isAckPayloadAvailable()) {
+    radio.read(&returnFlag, sizeof(returnFlag));
+    MyData[i].flag = returnFlag;
+    }else{
+      ping(i);
+    }
+  }
+}
+
 
 
 
@@ -104,9 +122,11 @@ void ping(int deviceNum) {
 
 void SetColor(){
   for(int i = 0; i < 30; i++){
-    if(MyData[i].conect){
+    if(MyData[i].connect){
       if(MyData[i].flag){
-        MyData[i].myColor = {0,255,0}; // green
+        MyData[i].myColor[0] = 0; //{0,255,0}; //green
+        MyData[i].myColor[1] = 255;
+        MyData[i].myColor[2] = 0;
         if(MyData[i].battery){
           for(int i = 200; i < 100; i-5){
             //реализация идеии с изменением яркости
@@ -119,10 +139,14 @@ void SetColor(){
           }
         }
       }else{
-        MyData[i].myColor = {255,0,0}; // red
+        MyData[i].myColor[0] = 255; //{255,0,0}; //red
+        MyData[i].myColor[1] = 0;
+        MyData[i].myColor[2] = 0;
       }
     }else{
-      MyData[i].myColor = {0,0,255}; // blue
+      MyData[i].myColor[0] = 0; //{0,0,255}; // blue
+      MyData[i].myColor[1] = 0;
+      MyData[i].myColor[2] = 255;
     }
   }
 }
@@ -139,15 +163,12 @@ void TrueColor(){
 
 
 
-
-
-
 void sys_init(){
   for (int i = 0; i < NUM_BUTTONS; i++) {
     buttons[i] = { GButton(buttonPins[i]) }; // Инициализация кнопки с соответствующим пином
   }
   for(int i = 0; i < 30; i++){
-    MyData[i].adresses = addressesLong[i];
+    MyData[i].adresse = addressesLong[i];
   }
   unsigned long startTime1 = millis();
   unsigned long startTimeCheck = millis();
@@ -155,8 +176,7 @@ void sys_init(){
 
 
 
-unsigned long startTime1;
-unsigned long startTimeCheck;
+
 
 void setup() {
   Serial.begin(9600);
@@ -171,38 +191,16 @@ void setup() {
 
 
 void LowBattery() {
-  static unsigned long lastBatteryCheckTime = 0;
-  static int turnover = 0;
-
-  // Запускать цикл раз в 5 секунд
-  if (millis() - lastBatteryCheckTime >= 5000) {
-    lastBatteryCheckTime = millis(); // Обновляем время последнего запуска
-
-    // Переключение между цветами 3 раза
-    for (turnover = 0; turnover < 3; turnover++) {
-      ShowWarningColors();
-    }
-  }
-}
-
-void ShowWarningColors() {
-  static unsigned long lastTrueColorTime = 0;
-  static unsigned long lastRedTime = 0;
-
-  // Правильные цвета горят 100 мс
-  if (millis() - lastTrueColorTime >= 100) {
-    lastTrueColorTime = millis();
+  for (int turnover = 0; turnover < 3; turnover++) {
+    delay(100);
     TrueColor();
-
-    // Красный горит 50 мс
-    if (millis() - lastRedTime >= 50) {
-      lastRedTime = millis();
-      for (int i = 0; i < NUM_LEDS; i++) {
-        leds[i] = CRGB(255, 0, 0); // Red
-      }
+    delay(100);
+    for (int i = 0; i < NUM_LEDS; i++) {
+      leds[i] = CRGB(255, 0, 0); // Red
     }
   }
 }
+
 
 
 
@@ -224,9 +222,8 @@ void loop() {
     for (int i = 0; i < NUM_BUTTONS; i++) {
       buttons[i].button.tick(); // Обновляем состояние кнопки
       if (buttons[i].button.isHold()){
-        Write(i,1)
-
-        }else{
+        Write(i,1);
+        }else if(!buttons[i].button.isHold()){ //зделал чуть проще если не прокатит то передалаю 
            Write(i,0);
         }
       }
@@ -236,20 +233,6 @@ void loop() {
 
 
 
-void Write(int myGroup, bool CommandToSent){
-  for(int i = 0; i < 3; i++){
-  radio.openWritingPipe(reinterpret_cast<const uint8_t*>(addresses[i + (myGruop*3)]));
-  radio.stopListening(); 
-//и поидеии где-то здесь должен быть таймаут как в пинге чтоб отсеивать не подключеные
-  bool success = radio.write(&CommandToSent, sizeof(CommandToSent));//можно попробывать изминить bool на int и присылать так: -1 - опущен, 1 - поднят, 0 неизвестно, поскольу погут быть потенциальные проблемы с индекацией в SetColor()
-  bool returnFlag;
-  if (success && radio.isAckPayloadAvailable()) {
-    radio.read(&returnFlag, sizeof(returnFlag));
-    MyData[i].flag = returnFlag
-    }else{
-      ping(i);
-    }
-  }
-}
+
 
 
