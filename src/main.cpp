@@ -13,12 +13,12 @@ struct DeviseStatus {
   bool flag;
   int ledsNum;
   int myColor[3];
-  char *adresses
+  char *adresse
 };
 
 const int buttonPins[] = {2, 3, 4, 5, 6, 7, A1, A2, A3, A4};
 
-#define VOLTAGE_TRIGGER_BATTERY 500 //вольтж акумулятора ниже которого срабатывает индекация
+#define VOLTAGE_TRIGGER_BATTERY 3.3 //вольтж акумулятора ниже которого срабатывает индекация
 #define BATTERY_PIN A0 //пин для измирения наприжения акумулятора
 
 
@@ -33,6 +33,7 @@ CRGB leds[NUM_LEDS];
 
 typedef struct {
     GButton button; // Объект GButton
+    bool state;
 } ButtonStruct;
 // Количество кнопок, равное размеру массива buttonPins
 const int NUM_BUTTONS = sizeof(buttonPins) / sizeof(buttonPins[0]);
@@ -222,7 +223,13 @@ void loop() {
     startTimeCheck = millis(); 
     for (int i = 0; i < NUM_BUTTONS; i++) {
       buttons[i].button.tick(); // Обновляем состояние кнопки
-      if (buttons[i].button.isHold())Write(i,1)else Write(i,0);
+      if (buttons[i].button.isHold()){
+        Write(i,1)
+
+        }else{
+           Write(i,0);
+        }
+      }
     }
   }
 }
