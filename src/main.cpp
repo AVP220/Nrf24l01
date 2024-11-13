@@ -59,6 +59,8 @@ void radio_init(){
   radio.setChannel(0x60);  //выбираем канал (в котором нет шумов!)
   radio.setPALevel (RF24_PA_MAX); //уровень мощности передатчика. На выбор RF24_PA_MIN, RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX
   radio.setDataRate (RF24_1MBPS); //скорость обмена. На выбор RF24_2MBPS, RF24_1MBPS, RF24_250KBPS
+  radio.powerUp(); //начать работу
+  radio.stopListening();  //не слушаем радиоэфир, мы передатчик
 }
 
 
