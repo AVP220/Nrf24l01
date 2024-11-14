@@ -18,7 +18,7 @@ struct DeviseStatus {
 
 const int buttonPins[] = {2, 3, 4, 5, 6, 7, A1, A2, A3, A4};
 
-#define VOLTAGE_TRIGGER_BATTERY 3.3 //вольтж акумулятора ниже которого срабатывает индекация
+#define VOLTAGE_TRIGGER_BATTERY 10//вольтж акумулятора ниже которого срабатывает индекация
 #define BATTERY_PIN A0 //пин для измирения наприжения акумулятора
 
 
@@ -49,6 +49,17 @@ unsigned long startTimeCheck;
 
 
 
+
+
+
+
+
+
+
+
+
+
+
 void radio_init(){
   radio.begin(); //активировать модуль
   radio.setAutoAck(1);         //режим подтверждения приёма, 1 вкл 0 выкл
@@ -62,6 +73,31 @@ void radio_init(){
   radio.powerUp(); //начать работу
   radio.stopListening();  //не слушаем радиоэфир, мы передатчик
 }
+
+void sys_init(){
+  for (int i = 0; i < NUM_BUTTONS; i++) {
+    buttons[i] = { GButton(buttonPins[i]) }; // Инициализация кнопки с соответствующим пином
+  }
+  for(int i = 0; i < 30; i++){
+    MyData[i].adresse = addressesLong[i];
+  }
+  unsigned long startTime1 = millis();
+  unsigned long startTimeCheck = millis();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 void ping(int deviceNum) {
@@ -85,7 +121,7 @@ void ping(int deviceNum) {
     }
 
     if (!timeout && radio.isAckPayloadAvailable()) {
-      //идея передать масив с двумя значениями, первое - значение акума, второе - значение флага
+      // Чтение двухзначного ответа
       int answer[2];
       radio.read(&answer, sizeof(answer));
 
@@ -96,7 +132,14 @@ void ping(int deviceNum) {
       // Ответ не получен, отмечаем устройство как не подключенное
       MyData[deviceNum].connect = false;
       MyData[deviceNum].battery = 0;
+      Serial.print("SETOFF for device ");
+      Serial.println(deviceNum);
     }
+  } else {
+    Serial.print("Failed to send ping to device ");
+    Serial.println(deviceNum);
+    MyData[deviceNum].connect = false;
+    MyData[deviceNum].battery = 0;
   }
   radio.startListening();
 }
@@ -122,7 +165,17 @@ void Write(int myGroup, bool CommandToSent){
 
 
 
+
+
+
+
+
+
+
+
+
 void SetColor(){
+  //Serial.println("SetColor();");
   for(int i = 0; i < 30; i++){
     if(MyData[i].connect){
       if(MyData[i].flag){
@@ -130,7 +183,7 @@ void SetColor(){
         MyData[i].myColor[1] = 255;
         MyData[i].myColor[2] = 0;
         if(MyData[i].battery){
-          for(int i = 200; i < 100; i-5){
+          for(int i = 200; i > 100; i-5){
             //реализация идеии с изменением яркости
             unsigned long startTimeBattery = millis();
             if (millis() - startTimeBattery >= 50) {  
@@ -141,11 +194,13 @@ void SetColor(){
           }
         }
       }else{
+        Serial.println("SetRED");
         MyData[i].myColor[0] = 255; //{255,0,0}; //red
         MyData[i].myColor[1] = 0;
         MyData[i].myColor[2] = 0;
       }
     }else{
+      Serial.println("SetBLUE");
       MyData[i].myColor[0] = 0; //{0,0,255}; // blue
       MyData[i].myColor[1] = 0;
       MyData[i].myColor[2] = 255;
@@ -155,42 +210,13 @@ void SetColor(){
 
 
 void TrueColor(){
+  //Serial.println("TrueColor");
   for(int i = 0; i < NUM_LEDS; i++){
     leds[i] = CRGB(MyData[i].myColor[0], MyData[i].myColor[1], MyData[i].myColor[2]); // установка правильных цветов
+    // Serial.println("sentColor");
     FastLED.show();
   }
 }
-
-
-
-
-
-void sys_init(){
-  for (int i = 0; i < NUM_BUTTONS; i++) {
-    buttons[i] = { GButton(buttonPins[i]) }; // Инициализация кнопки с соответствующим пином
-  }
-  for(int i = 0; i < 30; i++){
-    MyData[i].adresse = addressesLong[i];
-  }
-  unsigned long startTime1 = millis();
-  unsigned long startTimeCheck = millis();
-}
-
-
-
-
-
-void setup() {
-  Serial.begin(9600);
-  radio_init();
-  sys_init();
-  for(int i = 0; i < 30; i++){
-    ping(i);
-  }
-}
-
-
-
 
 void LowBattery() {
   for (int turnover = 0; turnover < 3; turnover++) {
@@ -208,7 +234,40 @@ void LowBattery() {
 
 
 
+
+
+
+
+void setup() {
+  FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
+  Serial.begin(9600);
+  radio_init();
+  sys_init();
+  for(int i = 0; i < 30; i++){
+    ping(i);
+  }
+  SetColor();
+  for(int i = 0; i < 30; i++){
+    Serial.print(MyData[i].myColor[0]);
+    Serial.print(MyData[i].myColor[1]);
+    Serial.println(MyData[i].myColor[2]);
+  }
+  TrueColor();
+  for(int i = 0; i < 30; i++){
+    Serial.print(" addres: ");
+    Serial.print(MyData[i].adresse);
+    Serial.print(" connect: ");
+    Serial.print(MyData[i].connect);
+    Serial.print(" flag: ");
+    Serial.print(MyData[i].flag);
+    Serial.print(" Battery: ");
+    Serial.println(MyData[i].battery);
+  }
+}
+
 void loop() {
+  
+
   if (millis() - startTime1 >= 60000) {  
     startTime1 = millis();
     for(int i = 0; i < 30; i++){
@@ -219,19 +278,22 @@ void loop() {
   }
 
 //millis 200ms 
-  if (millis() - startTimeCheck >= 200) {  
-    startTimeCheck = millis(); 
+
     for (int i = 0; i < NUM_BUTTONS; i++) {
       buttons[i].button.tick(); // Обновляем состояние кнопки
       if (buttons[i].button.isHold()){
         Write(i,1);
+        Serial.print("SetDown: ");
+        Serial.print(i);
         }else if(!buttons[i].button.isHold()){ //зделал чуть проще если не прокатит то передалаю 
-           Write(i,0);
+          Write(i,0);
+          Serial.print("SetUp: ");
+          Serial.println(i);
         }
       }
     }
   }
-}
+
 
 
 
