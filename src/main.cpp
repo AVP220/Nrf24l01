@@ -68,7 +68,7 @@ void ping(int deviceNum) {
   radio.openWritingPipe(reinterpret_cast<const uint8_t*>(MyData[deviceNum].adresse));
   radio.stopListening();
 
-  const char checkCommand[] = "CHECK";
+  const int checkCommand = 111;
   bool sendResult = radio.write(&checkCommand, sizeof(checkCommand));
 
   if (sendResult) {
