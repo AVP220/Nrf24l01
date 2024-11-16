@@ -1,230 +1,31 @@
-#include "nRF24L01.h" // библиотека радиомодуля
 #include <Arduino.h>
-#include <FastLED.h>
-#include <GyverButton.h>
-#include <RF24.h>
-#include <SPI.h>
+#include "DeviceStatus.h"
+#include "RadioComm.h"
+#include "LEDControl.h"
+#include "ButtonControl.h"
 
-char addressesLong[30][6] = {
-    "00001", "00002", "00003", "00004", "00005", "00006", "00007", "00008",
-    "00009", "00010", "00011", "00012", "00013", "00014", "00015", "00016",
-    "00017", "00018", "00019", "00020", "00021", "00022", "00023", "00024",
-    "00025", "00026", "00027", "00028", "00029", "00030"};
-
-struct DeviseStatus {
-  bool connect;
-  bool battery;
-  bool flag;
-  int ledsNum;
-  int myColor[3];
-  char *adresse;
-};
-
-const int buttonPins[] = {2, 3, 4, 5, 6, 7, A1, A2, A3, A4};
-
-#define VOLTAGE_TRIGGER_BATTERY                                                \
-  10 // вольтж акумулятора ниже которого срабатывает индекация
-#define BATTERY_PIN A0 // пин для измирения наприжения акумулятора
-
-#define NUM_LEDS 30 // Количество светодиодов в ленте
-#define DATA_PIN 8 // Пин для подключения светодиодной ленты
-
-DeviseStatus MyData[30];
-RF24 radio(9, 10); // CE на D9, CSN на D10
-CRGB leds[NUM_LEDS];
-
-typedef struct {
-  GButton button; // Объект GButton
-  bool state;
-} ButtonStruct;
-// Количество кнопок, равное размеру массива buttonPins
-const int NUM_BUTTONS = sizeof(buttonPins) / sizeof(buttonPins[0]);
-// Создаем массив структур ButtonStruct
-ButtonStruct buttons[NUM_BUTTONS] = {
-    {GButton(0)}}; // Инициализируем с временным значением
+#define VOLTAGE_TRIGGER_BATTERY 10
+#define BATTERY_PIN A0
 
 unsigned long startTime1;
 unsigned long startTimeCheck;
 
-void radio_init() {
-  radio.begin(); // активировать модуль
-  radio.setAutoAck(1); // режим подтверждения приёма, 1 вкл 0 выкл
-  radio.setRetries(0, 15); //(время между попыткой достучаться, число попыток)
-  radio.enableAckPayload(); // разрешить отсылку данных в ответ на входящий
-                            // сигнал
-  radio.setPayloadSize(6);  // размер пакета, в байтах
-  // radio.openReadingPipe(1, address[0]);     //хотим слушать трубу 0
-  radio.setChannel(0x60); // выбираем канал (в котором нет шумов!)
-  radio.setPALevel(
-      RF24_PA_MAX); // уровень мощности передатчика. На выбор RF24_PA_MIN,
-                    // RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX
-  radio.setDataRate(RF24_1MBPS); // скорость обмена. На выбор RF24_2MBPS,
-                                 // RF24_1MBPS, RF24_250KBPS
-  radio.powerUp(); // начать работу
-  radio.stopListening(); // не слушаем радиоэфир, мы передатчик
-}
-
-void sys_init() {
-  for (int i = 0; i < NUM_BUTTONS; i++) {
-    buttons[i] = {
-        GButton(buttonPins[i])}; // Инициализация кнопки с соответствующим пином
-  }
-  for (int i = 0; i < 30; i++) {
-    MyData[i].adresse = addressesLong[i];
-  }
-  unsigned long startTime1 = millis();
-  unsigned long startTimeCheck = millis();
-}
-
-void ping(int deviceNum) {
-  radio.openWritingPipe(
-      reinterpret_cast<const uint8_t *>(MyData[deviceNum].adresse));
-  radio.stopListening();
-
-  const int checkCommand = 111;
-  bool sendResult = radio.write(&checkCommand, sizeof(checkCommand));
-
-  if (sendResult) {
-    // Устанавливаем время начала ожидания
-    unsigned long startTime = millis();
-    bool timeout = false;
-
-    // Ждем ответ в течение таймаута
-    while (!radio.isAckPayloadAvailable()) {
-      if (millis() - startTime > 200) { // Таймаут 200 мс
-        timeout = true;
-        break;
-      }
-    }
-
-    if (!timeout && radio.isAckPayloadAvailable()) {
-      // Чтение двухзначного ответа
-      int answer[2];
-      radio.read(&answer, sizeof(answer));
-
-      MyData[deviceNum].connect = true;
-      MyData[deviceNum].battery = answer[0];
-      MyData[deviceNum].flag = answer[1];
-    } else {
-      // Ответ не получен, отмечаем устройство как не подключенное
-      MyData[deviceNum].connect = false;
-      MyData[deviceNum].battery = 0;
-      Serial.print("SETOFF for device ");
-      Serial.println(deviceNum);
-    }
-  } else {
-    Serial.print("Failed to send ping to device ");
-    Serial.println(deviceNum);
-    MyData[deviceNum].connect = false;
-    MyData[deviceNum].battery = 0;
-  }
-  radio.startListening();
-}
-
-void Write(int myGroup, bool CommandToSent) {
-  for (int i = 0; i < 3; i++) {
-    radio.openWritingPipe(
-        reinterpret_cast<const uint8_t *>(MyData[i + (myGroup * 3)].adresse));
-    radio.stopListening();
-    // и поидеии где-то здесь должен быть таймаут как в пинге чтоб отсеивать не
-    // подключеные
-    bool success = radio.write(
-        &CommandToSent,
-        sizeof(CommandToSent)); // можно попробывать изминить bool на int и
-                                // присылать так: -1 - опущен, 1 - поднят, 0
-                                // неизвестно, поскольу погут быть потенциальные
-                                // проблемы с индекацией в SetColor()
-    bool returnFlag;
-    if (success && radio.isAckPayloadAvailable()) {
-      radio.read(&returnFlag, sizeof(returnFlag));
-      MyData[i].flag = returnFlag;
-    } else {
-      ping(i);
-    }
-  }
-}
-
-void SetColor() {
-  // Serial.println("SetColor();");
-  for (int i = 0; i < 30; i++) {
-    if (MyData[i].connect) {
-      if (MyData[i].flag) {
-        MyData[i].myColor[0] = 0; //{0,255,0}; //green
-        MyData[i].myColor[1] = 255;
-        MyData[i].myColor[2] = 0;
-        if (MyData[i].battery) {
-          for (int i = 200; i > 100; i - 5) {
-            // реализация идеии с изменением яркости
-            unsigned long startTimeBattery = millis();
-            if (millis() - startTimeBattery >= 50) {
-              startTimeBattery = millis();
-              FastLED.setBrightness(i);
-            }
-            if (i == 100)
-              i = 200;
-          }
-        }
-      } else {
-        Serial.println("SetRED");
-        MyData[i].myColor[0] = 255; //{255,0,0}; //red
-        MyData[i].myColor[1] = 0;
-        MyData[i].myColor[2] = 0;
-      }
-    } else {
-      Serial.println("SetBLUE");
-      MyData[i].myColor[0] = 0; //{0,0,255}; // blue
-      MyData[i].myColor[1] = 0;
-      MyData[i].myColor[2] = 255;
-    }
-  }
-}
-
-void TrueColor() {
-  // Serial.println("TrueColor");
-  for (int i = 0; i < NUM_LEDS; i++) {
-    leds[i] = CRGB(MyData[i].myColor[0], MyData[i].myColor[1],
-                   MyData[i].myColor[2]); // установка правильных цветов
-    // Serial.println("sentColor");
-    FastLED.show();
-  }
-}
-
-void LowBattery() {
-  for (int turnover = 0; turnover < 3; turnover++) {
-    delay(100);
-    TrueColor();
-    delay(100);
-    for (int i = 0; i < NUM_LEDS; i++) {
-      leds[i] = CRGB(255, 0, 0); // Red
-    }
-  }
-}
-
 void setup() {
-  FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS);
   Serial.begin(9600);
+  initLEDs();
+  initButtons();
   radio_init();
-  sys_init();
+
   for (int i = 0; i < 30; i++) {
+    MyData[i].address = addressesLong[i];
     ping(i);
   }
+
   SetColor();
-  for (int i = 0; i < 30; i++) {
-    Serial.print(MyData[i].myColor[0]);
-    Serial.print(MyData[i].myColor[1]);
-    Serial.println(MyData[i].myColor[2]);
-  }
   TrueColor();
-  for (int i = 0; i < 30; i++) {
-    Serial.print(" addres: ");
-    Serial.print(MyData[i].adresse);
-    Serial.print(" connect: ");
-    Serial.print(MyData[i].connect);
-    Serial.print(" flag: ");
-    Serial.print(MyData[i].flag);
-    Serial.print(" Battery: ");
-    Serial.println(MyData[i].battery);
-  }
+
+  startTime1 = millis();
+  startTimeCheck = millis();
 }
 
 void loop() {
@@ -237,13 +38,5 @@ void loop() {
       LowBattery();
     }
   }
-  bool oldStates[NUM_BUTTONS] = {0};
-  for (int i = 0; i < NUM_BUTTONS; i++) {
-    buttons[i].button.tick();
-    bool State = buttons[i].button.isPressed();
-    if (State != oldState[i]) {
-      Write(i, State);
-      oldStates[i] = State;
-    }
-  }
+  updateButtons();
 }
