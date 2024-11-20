@@ -1,4 +1,5 @@
 #include "ButtonControl.h"
+#include "RadioComm.h"
 
 const int buttonPins[NUM_BUTTONS] = {2, 3, 4, 5, 6, 7, A1, A2, A3, A4};
 
@@ -30,9 +31,11 @@ void updateButtons() {
       if (buttons[i].button.isHold()) {
         Serial.print("SetUp: ");
         Serial.println(i);
+        Write(i, 257);
       } else {
         Serial.print("SetDown: ");
         Serial.println(i);
+        Write(i, 99);
       }
       buttons[i].oldState = buttons[i].state;
     }

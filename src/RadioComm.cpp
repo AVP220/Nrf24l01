@@ -16,19 +16,23 @@ void radio_init() {
 
   radio.setAutoAck(1); // режим подтверждения приёма, 1 вкл 0 выкл
   radio.setRetries(0, 15); //(время между попыткой достучаться, число попыток)
-  radio.enableAckPayload(); // разрешить отсылку данных в ответ на входящий// сигнал
-  radio.setPayloadSize(6);  // размер пакета, в байтах
-
+  radio.enableAckPayload(); // разрешить отсылку данных в ответ на входящий//
+                            // сигнал
+  radio.enableDynamicPayloads();
   radio.setChannel(0x60); // выбираем канал (в котором нет шумов!)
-  radio.setPALevel(RF24_PA_MAX); // уровень мощности передатчика. На выбор RF24_PA_MIN, // RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX
-  radio.setDataRate(RF24_1MBPS); // скорость обмена. На выбор RF24_2MBPS, // RF24_1MBPS, RF24_250KBPS
-  
+  radio.setPALevel(
+      RF24_PA_MAX); // уровень мощности передатчика. На выбор RF24_PA_MIN, //
+                    // RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX
+  radio.setDataRate(RF24_1MBPS); // скорость обмена. На выбор RF24_2MBPS, //
+                                 // RF24_1MBPS, RF24_250KBPS
+
   radio.powerUp(); // начать работу
   radio.stopListening(); // не слушаем радиоэфир, мы передатчик
 }
 
 void ping(int deviceNum) {
-  radio.openWritingPipe(reinterpret_cast<const uint8_t *>(MyData[deviceNum].address));
+  radio.openWritingPipe(
+      reinterpret_cast<const uint8_t *>(MyData[deviceNum].address));
   radio.stopListening();
 
   const int checkCommand = 111;
@@ -71,27 +75,42 @@ void ping(int deviceNum) {
   radio.startListening();
 }
 
-void Write(int myGroup, bool commandToSend)
-{
-  for (int i = 0; i < 3; i++) {
-    radio.openWritingPipe(reinterpret_cast<const uint8_t *>(MyData[i + (myGroup * 3)].address));
-    radio.stopListening();
-    // и поидеии где-то здесь должен быть таймаут как в пинге чтоб отсеивать не
-    // подключеные
-    bool success = radio.write(
-        &commandToSend,
-        sizeof(commandToSend)); // можно попробывать изминить bool на int и
-                                // присылать так: -1 - опущен, 1 - поднят, 0
-                                // неизвестно, поскольу погут быть потенциальные
-                                // проблемы с индекацией в SetColor()
-    bool returnFlag;
-    if (success && radio.isAckPayloadAvailable()) {
-      radio.read(&returnFlag, sizeof(returnFlag));
-      MyData[i].flag = returnFlag;
-      Serial.println("good");
-    } else {
-      Serial.println("Bad");
-      // ping(i);
+void Write(int myGroup, int commandSend) {
+    for (int i = 0; i < 3; i++) {
+        int deviceIndex = i + (myGroup * 3);
+        
+        // Проверяем, подключено ли устройство
+        if (!MyData[deviceIndex].connect) {
+            Serial.print("Device not connected: ");
+            Serial.println(MyData[deviceIndex].address);
+            continue; // Пропускаем устройство
+        }
+
+        radio.openWritingPipe(reinterpret_cast<const uint8_t *>(MyData[deviceIndex].address));
+        radio.stopListening();
+
+        int commandToSend = commandSend;
+        bool success = radio.write(&commandToSend, sizeof(commandToSend));
+
+        unsigned long startTime = millis();
+        bool timeout = false;
+
+        while (!radio.isAckPayloadAvailable()) {
+            if (millis() - startTime > 200) { // Таймаут 200 мс
+                timeout = true;
+                break;
+            }
+        }
+
+        if (!timeout && radio.isAckPayloadAvailable()) {
+            bool returnFlag;
+            radio.read(&returnFlag, sizeof(returnFlag));
+            MyData[deviceIndex].flag = returnFlag;
+            Serial.println("good");
+        } else {
+            Serial.println("Bad");
+            MyData[deviceIndex].connect = false; 
+        }
     }
-  }
 }
+

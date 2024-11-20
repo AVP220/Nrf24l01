@@ -5,6 +5,7 @@
 
 void initButtons();
 void updateButtons();
+void Write(int myGroup, int commandToSend);
 
 #define NUM_BUTTONS 10
 
