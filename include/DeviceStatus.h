@@ -3,7 +3,7 @@
 
 struct DeviceStatus {
   bool connect;
-  bool battery;
+  int battery;
   bool flag;
   int ledsNum;
   int myColor[3];

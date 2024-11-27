@@ -1,7 +1,7 @@
 #include "ButtonControl.h"
 #include "RadioComm.h"
 
-const int buttonPins[NUM_BUTTONS] = {2, 3, 4, 5, 6, 7, A1, A2, A3, A4};
+const int buttonPins[NUM_BUTTONS] = {2, 3, 4, 5, 6, 7, A4, A5, A6, A7};
 
 typedef struct {
   GButton button;

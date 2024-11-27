@@ -31,6 +31,7 @@ void radio_init() {
 }
 
 void ping(int deviceNum) {
+  Serial.println("Ping---------------");
   radio.openWritingPipe(
       reinterpret_cast<const uint8_t *>(MyData[deviceNum].address));
   radio.stopListening();
@@ -53,11 +54,13 @@ void ping(int deviceNum) {
 
     if (!timeout && radio.isAckPayloadAvailable()) {
       // Чтение двухзначного ответа
-      int answer[2];
+      byte answer[2];
+      Serial.println("Answers: ");
       radio.read(&answer, sizeof(answer));
-
       MyData[deviceNum].connect = true;
+      //Serial.println(answer[0]);
       MyData[deviceNum].battery = answer[0];
+      //Serial.println(answer[1]);
       MyData[deviceNum].flag = answer[1];
     } else {
       // Ответ не получен, отмечаем устройство как не подключенное
@@ -101,8 +104,8 @@ void Write(int myGroup, int commandSend) {
                 break;
             }
         }
-
-        if (!timeout && radio.isAckPayloadAvailable()) {
+//!timeout &&
+        if ( radio.isAckPayloadAvailable()) {
             bool returnFlag;
             radio.read(&returnFlag, sizeof(returnFlag));
             MyData[deviceIndex].flag = returnFlag;
@@ -110,7 +113,10 @@ void Write(int myGroup, int commandSend) {
         } else {
             Serial.println("Bad");
             MyData[deviceIndex].connect = false; 
+            ping(deviceIndex);
         }
     }
+    SetColor();
+    TrueColor();
 }
 
