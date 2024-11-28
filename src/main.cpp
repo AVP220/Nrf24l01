@@ -22,7 +22,6 @@ void setup() {
   }
 
   SetColor();
-  TrueColor();
 
   startTime1 = millis();
   startTimeCheck = millis();
@@ -32,7 +31,6 @@ void loop() {
   // if (millis() - startTimeCheck >= 5000) {
   //   startTimeCheck = millis();
   //   SetColor();
-  //   TrueColor();
   // }
   if (millis() - startTime1 >= 60000) {
     startTime1 = millis();
@@ -40,7 +38,6 @@ void loop() {
       ping(i);
     }
     SetColor();
-    TrueColor();
     if (analogRead(BATTERY_PIN) < VOLTAGE_TRIGGER_BATTERY) {
       LowBattery();
     }
