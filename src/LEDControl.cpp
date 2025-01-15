@@ -3,7 +3,10 @@
 
 CRGB leds[NUM_LEDS];
 
-void initLEDs() { FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS); }
+void initLEDs() { 
+  FastLED.addLeds<WS2812, DATA_PIN, RGB>(leds, NUM_LEDS); 
+  FastLED.setBrightness(100);
+}
 
 void SetColor(int I)
 {

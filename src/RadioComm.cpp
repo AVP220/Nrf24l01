@@ -17,15 +17,12 @@ void radio_init()
 
   radio.setAutoAck(1);      // режим подтверждения приёма, 1 вкл 0 выкл
   radio.setRetries(0, 15);  //(время между попыткой достучаться, число попыток)
-  radio.enableAckPayload(); // разрешить отсылку данных в ответ на входящий//
-                            // сигнал
+  radio.enableAckPayload(); // разрешить отсылку данных в ответ на входящий
   radio.enableDynamicPayloads();
+
   radio.setChannel(0x60); // выбираем канал (в котором нет шумов!)
-  radio.setPALevel(
-      RF24_PA_MAX);              // уровень мощности передатчика. На выбор RF24_PA_MIN, //
-                                 // RF24_PA_LOW, RF24_PA_HIGH, RF24_PA_MAX
-  radio.setDataRate(RF24_1MBPS); // скорость обмена. На выбор RF24_2MBPS, //
-                                 // RF24_1MBPS, RF24_250KBPS
+  radio.setPALevel(RF24_PA_LOW);
+  radio.setDataRate(RF24_1MBPS);
 
   radio.powerUp();       // начать работу
   radio.stopListening(); // не слушаем радиоэфир, мы передатчик
@@ -81,7 +78,7 @@ void ping(int deviceNum)
   }
   else
   {
-    Serial.print("Failed to send ping to device ");
+    Serial.print("FALIED to send ping to device ");
     Serial.println(deviceNum);
     MyData[deviceNum].connect = false;
     MyData[deviceNum].battery = 0;
@@ -100,10 +97,12 @@ void Write(int myGroup, int commandSend)
     {
       Serial.print("Device not connected: ");
       Serial.println(MyData[deviceIndex].address);
+      ping(deviceIndex);
       continue; // Пропускаем устройство
     }
 
-    radio.openWritingPipe(reinterpret_cast<const uint8_t *>(MyData[deviceIndex].address));
+    radio.openWritingPipe(
+        reinterpret_cast<const uint8_t *>(MyData[deviceIndex].address));
     radio.stopListening();
 
     int commandToSend = commandSend;
@@ -121,7 +120,7 @@ void Write(int myGroup, int commandSend)
       }
     }
     //! timeout &&
-    if (!timeout && radio.isAckPayloadAvailable())
+    if (radio.isAckPayloadAvailable())
     {
       byte answer[2];
       radio.read(&answer, sizeof(answer));
